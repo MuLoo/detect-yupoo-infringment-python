@@ -39,7 +39,6 @@ class ACbumChecker:
       else:
         data = res.get('data')
         list = data.get('list')
-        print(f'data ------ {data}')
         if data is None or len(list) == 0:
           return None
         else:
