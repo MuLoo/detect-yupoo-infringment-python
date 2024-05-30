@@ -14,6 +14,7 @@ class ACbumChecker:
     self.keyword = keyword
     self.page = 1
     self.results = []
+    self.password = None
 
   async def send_get_request(self, url):
     async with aiohttp.ClientSession() as session:
@@ -22,7 +23,7 @@ class ACbumChecker:
           res = await response.json()
           return res
         else:
-          print(colored(f'error: {response.status} {response.text}', 'red'))
+          print(colored(f'请求出现错误，Error: {response.status} {response.text}', 'red'))
           return None
 
   async def get_user_info (self) :
@@ -30,28 +31,34 @@ class ACbumChecker:
     return await self.send_get_request(url)
 
   async def check_Album (self,id):
-    url = f'https://x.yupoo.com/api/web/users/{id}/albums?page={self.page}'
-    res = await self.send_get_request(url)
-    if res is None:
-      return None
-    else:
-      data = res.get('data')
-      list = data.get('list')
-      if len(list) == 0:
+    try:
+      url = f'https://x.yupoo.com/api/web/users/{id}/albums?page={self.page}&password={self.password}'
+      res = await self.send_get_request(url)
+      if res is None:
         return None
       else:
-        self.page += 1
-        for item in list:
-          name = item.get('name')
-          description = item.get('description')
-          if self.is_infrigement(item):
-            self.results.append({
-              "name": name,
-              "link": f'https://{self.username}.x.yupoo.com/albums/{item["id"]}?uid=1'
-            })
-            print(colored(f'找到一个相册：{name}', 'yellow'))
+        data = res.get('data')
+        list = data.get('list')
+        print(f'data ------ {data}')
+        if data is None or len(list) == 0:
+          return None
+        else:
+          self.page += 1
+          for item in list:
+            name = item.get('name')
+            description = item.get('description')
+            if self.is_infrigement(item):
+              self.results.append({
+                "name": name,
+                "link": f'https://{self.username}.x.yupoo.com/albums/{item["id"]}?uid=1',
+                "backlink": f'https://x.yupoo.com/gallery/{item["id"]}'
+              })
+              print(colored(f'找到一个相册：{name}', 'yellow'))
+      await self.check_Album(id)
+    except Exception as e:
+      print(colored(f'出现错误，退出程序: {e}', 'red'))
+      os._exit(1)
 
-    await self.check_Album(id)
 
 
   def is_infrigement(self,album):
@@ -67,9 +74,9 @@ class ACbumChecker:
     file_path = filedialog.asksaveasfilename(defaultextension=".csv", initialfile=f'{self.username}_results.csv',filetypes=[("CSV files", "*.csv")])
     if file_path:
       with open(file_path, 'w') as f:
-        f.write('Album name, Album Link\n')
+        f.write('Album name, Album Link, Album Console Link\n')
         for item in self.results:
-          f.write(f'{item["name"]}, {item["link"]}\n')
+          f.write(f'{item["name"]}, {item["link"]}, {item["backlink"]}\n')
         print(colored(f'导出文件成功,文件位置:{file_path}', 'green'))
 
   async def main (self):
@@ -77,6 +84,9 @@ class ACbumChecker:
     if userinfo is not None:
       data = userinfo.get('data')
       id = data.get('id')
+      if data.get('needPassWord') == True and data.get('passwordValid') != True:
+        self.password = input(colored('该用户主页加密，请输入密码: ', 'blue'))
+
       print(colored(f'用户名: {self.username}, id 是 {id}， 开始查询相册...', 'blue'))
       await asyncio.gather(self.check_Album(id))
       print(colored(f'查询完毕，查到 {len(self.results)} 个相册', 'green'))
